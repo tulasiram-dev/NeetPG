@@ -63,9 +63,22 @@ export default function App() {
   const [isFetching, setIsFetching] = useState(false);
   const [analyticsFilter, setAnalyticsFilter] = useState('All Subjects');
   const [newTest, setNewTest] = useState({ type: 'Grand Test', subject: 'Anatomy', correct: '', incorrect: '', left: '', date: new Date().toISOString().split('T')[0] });
+  
+  // 1. Dynamic Date Reference for Midnight Updates
+  const [today, setToday] = useState(new Date());
 
-  // Dedicated Ref for scrolling
   const todayRef = useRef(null);
+
+  // Auto-refresh date if tab is left open
+  useEffect(() => {
+    const handleFocus = () => setToday(new Date());
+    window.addEventListener('focus', handleFocus);
+    const interval = setInterval(() => setToday(new Date()), 3600000);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, []);
 
   const loadDataFromSheet = async () => {
     if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes('YOUR_NEW_DEPLOYMENT')) return;
@@ -83,18 +96,13 @@ export default function App() {
 
   useEffect(() => { loadDataFromSheet(); }, []);
 
-  // ENHANCED AUTO-SCROLL FOR MOBILE
   useEffect(() => {
     if (activeTab === 'schedule') {
-      // Small delay allows the DOM to render the container first
       const scrollTimer = setTimeout(() => {
         if (todayRef.current) {
-          todayRef.current.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'center' 
-          });
+          todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-      }, 300); // Increased timeout for mobile stability
+      }, 400); 
       return () => clearTimeout(scrollTimer);
     }
   }, [activeTab]);
@@ -132,12 +140,25 @@ export default function App() {
     return [{ name: 'Correct', value: totals.correct }, { name: 'Wrong', value: totals.incorrect }, { name: 'Left', value: totals.left }];
   }, [activeTests, analyticsFilter]);
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const currentSubjectData = DAILY_SCHEDULE.find(d => d.date === todayStr) || 
-                             DAILY_SCHEDULE.slice().reverse().find(d => d.date < todayStr) || 
-                             { subject: 'Planning', tasks: [] };
+  // --- IMPROVED BUFFER LOGIC ---
+  const todayStr = today.toISOString().split('T')[0];
+  const exactMatch = DAILY_SCHEDULE.find(d => d.date === todayStr);
+  
+  const currentSubjectData = useMemo(() => {
+    if (exactMatch) return exactMatch;
+    const lastSubject = [...DAILY_SCHEDULE].reverse().find(d => d.date < todayStr);
+    return {
+      subject: "Buffer & Revision",
+      isBuffer: true,
+      tasks: [
+        `Revise ${lastSubject?.subject || 'Previous'} High-Yield`,
+        "Clear Pending Backlogs",
+        "Daily Custom QBank Module"
+      ]
+    };
+  }, [todayStr, exactMatch]);
 
-  const daysToExam = Math.ceil((new Date('2026-08-30') - new Date()) / (1000 * 60 * 60 * 24));
+  const daysToExam = Math.ceil((new Date('2026-08-30') - today) / (1000 * 60 * 60 * 24));
 
   const addTest = () => {
     if (!newTest.correct || newTest.correct.trim() === "") {
@@ -169,28 +190,28 @@ export default function App() {
         {/* RESPONSIVE DYNAMIC HEADER */}
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-3xl shadow-2xl p-5 md:p-8 mb-6 text-white overflow-hidden">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2">
-              <Target className="shrink-0" size={32} />
-              <span className="tracking-tight uppercase">NEET PG 2026</span>
+            <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2 text-white">
+              <Target className="shrink-0 text-white" size={32} />
+              <span className="tracking-tight uppercase text-white">NEET PG 2026</span>
             </h1>
-            <div className="flex items-center gap-3 bg-white/20 px-3 py-1.5 rounded-2xl backdrop-blur-md w-full sm:w-auto justify-between">
-              <button onClick={loadDataFromSheet} className={`p-1 hover:bg-white/20 rounded-full transition-transform ${isFetching ? 'animate-spin' : ''}`}>
+            <div className="flex items-center gap-3 bg-white/20 px-3 py-1.5 rounded-2xl backdrop-blur-md w-full sm:w-auto justify-between text-white">
+              <button onClick={loadDataFromSheet} className={`p-1 hover:bg-white/20 rounded-full transition-transform text-white ${isFetching ? 'animate-spin' : ''}`}>
                 <RefreshCcw size={18} />
               </button>
-              <span className="text-xs md:text-sm font-black tracking-widest uppercase">30 AUG 2026</span>
+              <span className="text-xs md:text-sm font-black tracking-widest uppercase text-white">30 AUG 2026</span>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm">
-              <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1"><Calendar size={12} /> Countdown</p>
-              <p className="text-2xl font-black">{daysToExam} Days</p>
+            <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm text-white">
+              <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1 text-white"><Calendar size={12} /> Countdown</p>
+              <p className="text-2xl font-black text-white">{daysToExam} Days</p>
             </div>
-            <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm min-w-0">
+            <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm min-w-0 text-white">
               <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1 text-white"><MapPin size={12} /> Current Subject</p>
-              <p className="text-2xl font-black truncate text-white uppercase">{currentSubjectData.subject}</p>
+              <p className="text-2xl font-black truncate uppercase text-white">{currentSubjectData.subject}</p>
             </div>
-            <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm">
+            <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm text-white">
               <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1 text-white"><TrendingUp size={12} /> Accuracy</p>
               <p className="text-2xl font-black text-white">
                 {activeTests.length > 0 ? (activeTests.reduce((a,b)=>a+parseFloat(b.accuracy),0)/activeTests.length).toFixed(1) : 0}%
@@ -212,14 +233,22 @@ export default function App() {
         {activeTab === 'dashboard' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-3xl shadow-xl p-6">
-              <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2"><Zap className="text-purple-500" size={20}/> Today's Focus</h2>
+              <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2"><Zap className="text-purple-500" size={20}/> {exactMatch ? "Today's Focus" : "Buffer Day Strategy"}</h2>
               <div className="space-y-3">
-                {currentSubjectData.tasks.map(t => (
-                  <div key={t} className="flex items-center justify-between p-4 bg-purple-50 rounded-2xl border border-purple-100">
-                    <span className="font-bold text-purple-900 text-xs uppercase tracking-tight">{t}</span>
-                    <CheckCircle2 className={taskProgress[`${todayStr}-${t}`] ? "text-green-500" : "text-gray-300"} size={20} />
-                  </div>
-                ))}
+                {currentSubjectData.tasks.map(t => {
+                  const key = exactMatch ? `${todayStr}-${t}` : `buffer-${todayStr}-${t}`;
+                  const isDone = taskProgress[key];
+                  return (
+                    <div 
+                      key={t} 
+                      onClick={() => toggleTask(exactMatch ? todayStr : `buffer-${todayStr}`, t)}
+                      className="flex items-center justify-between p-4 bg-purple-50 rounded-2xl border border-purple-100 cursor-pointer active:scale-95 transition-all"
+                    >
+                      <span className={`font-bold text-xs uppercase tracking-tight ${isDone ? 'text-gray-400 line-through' : 'text-purple-900'}`}>{t}</span>
+                      <CheckCircle2 className={isDone ? "text-green-500" : "text-gray-300"} size={20} />
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div className="bg-white rounded-3xl shadow-xl p-6">
@@ -233,13 +262,13 @@ export default function App() {
           </div>
         )}
 
-        {/* TESTS TAB */}
+        {/* ... (Keep your existing Tests and Schedule tabs exactly as they are below) ... */}
         {activeTab === 'tests' && (
           <div className="space-y-6 pb-10">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white p-6 rounded-3xl shadow-xl border border-purple-100 min-h-[250px] flex flex-col justify-center">
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-white">Mistake Profile</h3>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Mistake Profile</h3>
                   <div className="text-[10px] font-bold bg-purple-50 text-purple-600 px-2 py-1 rounded-lg">Live Filter</div>
                 </div>
                 {filteredPieData.length > 0 ? (
@@ -300,7 +329,6 @@ export default function App() {
           </div>
         )}
 
-        {/* SCHEDULE TAB */}
         {activeTab === 'schedule' && (
           <div className="space-y-3 h-[60vh] overflow-y-auto pr-1 custom-scrollbar pb-10">
             {DAILY_SCHEDULE.map(day => {
