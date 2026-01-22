@@ -64,7 +64,7 @@ export default function App() {
   const [analyticsFilter, setAnalyticsFilter] = useState('All Subjects');
   const [newTest, setNewTest] = useState({ type: 'Grand Test', subject: 'Anatomy', correct: '', incorrect: '', left: '', date: new Date().toISOString().split('T')[0] });
 
-  // Ref for Auto-scroll
+  // Dedicated Ref for scrolling
   const todayRef = useRef(null);
 
   const loadDataFromSheet = async () => {
@@ -83,12 +83,19 @@ export default function App() {
 
   useEffect(() => { loadDataFromSheet(); }, []);
 
-  // AUTO-SCROLL LOGIC
+  // ENHANCED AUTO-SCROLL FOR MOBILE
   useEffect(() => {
-    if (activeTab === 'schedule' && todayRef.current) {
-      setTimeout(() => {
-        todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 100);
+    if (activeTab === 'schedule') {
+      // Small delay allows the DOM to render the container first
+      const scrollTimer = setTimeout(() => {
+        if (todayRef.current) {
+          todayRef.current.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }
+      }, 300); // Increased timeout for mobile stability
+      return () => clearTimeout(scrollTimer);
     }
   }, [activeTab]);
 
@@ -161,29 +168,29 @@ export default function App() {
         
         {/* RESPONSIVE DYNAMIC HEADER */}
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-3xl shadow-2xl p-5 md:p-8 mb-6 text-white overflow-hidden">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 text-white">
-            <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2 text-white">
-              <Target className="shrink-0 text-white" size={32} />
-              <span className="tracking-tight uppercase text-white">NEET PG 2026</span>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2">
+              <Target className="shrink-0" size={32} />
+              <span className="tracking-tight uppercase">NEET PG 2026</span>
             </h1>
-            <div className="flex items-center gap-3 bg-white/20 px-3 py-1.5 rounded-2xl backdrop-blur-md w-full sm:w-auto justify-between text-white">
-              <button onClick={loadDataFromSheet} className={`p-1 hover:bg-white/20 rounded-full transition-transform text-white ${isFetching ? 'animate-spin' : ''}`}>
+            <div className="flex items-center gap-3 bg-white/20 px-3 py-1.5 rounded-2xl backdrop-blur-md w-full sm:w-auto justify-between">
+              <button onClick={loadDataFromSheet} className={`p-1 hover:bg-white/20 rounded-full transition-transform ${isFetching ? 'animate-spin' : ''}`}>
                 <RefreshCcw size={18} />
               </button>
-              <span className="text-xs md:text-sm font-black tracking-widest uppercase text-white">30 AUG 2026</span>
+              <span className="text-xs md:text-sm font-black tracking-widest uppercase">30 AUG 2026</span>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm">
-              <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1 text-white"><Calendar size={12} /> Countdown</p>
-              <p className="text-2xl font-black text-white">{daysToExam} Days</p>
+              <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1"><Calendar size={12} /> Countdown</p>
+              <p className="text-2xl font-black">{daysToExam} Days</p>
             </div>
             <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm min-w-0">
               <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1 text-white"><MapPin size={12} /> Current Subject</p>
-              <p className="text-2xl font-black truncate uppercase text-white">{currentSubjectData.subject}</p>
+              <p className="text-2xl font-black truncate text-white uppercase">{currentSubjectData.subject}</p>
             </div>
-            <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm text-white">
+            <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm">
               <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1 text-white"><TrendingUp size={12} /> Accuracy</p>
               <p className="text-2xl font-black text-white">
                 {activeTests.length > 0 ? (activeTests.reduce((a,b)=>a+parseFloat(b.accuracy),0)/activeTests.length).toFixed(1) : 0}%
@@ -232,7 +239,7 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white p-6 rounded-3xl shadow-xl border border-purple-100 min-h-[250px] flex flex-col justify-center">
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Mistake Profile</h3>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-white">Mistake Profile</h3>
                   <div className="text-[10px] font-bold bg-purple-50 text-purple-600 px-2 py-1 rounded-lg">Live Filter</div>
                 </div>
                 {filteredPieData.length > 0 ? (
@@ -293,30 +300,33 @@ export default function App() {
           </div>
         )}
 
-        {/* SCHEDULE TAB (WITH AUTO SCROLL) */}
+        {/* SCHEDULE TAB */}
         {activeTab === 'schedule' && (
           <div className="space-y-3 h-[60vh] overflow-y-auto pr-1 custom-scrollbar pb-10">
-            {DAILY_SCHEDULE.map(day => (
-              <div 
-                key={day.date} 
-                ref={day.date === todayStr ? todayRef : null}
-                className={`bg-white p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center shadow-sm border-l-8 ${day.date === todayStr ? 'border-purple-600 ring-2 ring-purple-100 shadow-lg scale-[1.01]' : 'border-purple-100 opacity-90'}`}
-              >
-                <div className="w-full md:w-1/4 mb-3 md:mb-0">
-                  <div className="font-bold text-gray-800 text-lg leading-none">{new Date(day.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</div>
-                  <div className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">{day.subject}</div>
+            {DAILY_SCHEDULE.map(day => {
+              const isToday = day.date === todayStr;
+              return (
+                <div 
+                  key={day.date} 
+                  ref={isToday ? todayRef : null}
+                  className={`bg-white p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center shadow-sm border-l-8 ${isToday ? 'border-purple-600 ring-2 ring-purple-100 shadow-lg scale-[1.01]' : 'border-purple-100 opacity-90'}`}
+                >
+                  <div className="w-full md:w-1/4 mb-3 md:mb-0">
+                    <div className="font-bold text-gray-800 text-lg leading-none">{new Date(day.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</div>
+                    <div className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">{day.subject}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                    {day.tasks.map(task => {
+                      const key = `${day.date}-${task}`;
+                      const active = taskProgress[key];
+                      return (
+                        <button key={task} onClick={() => toggleTask(day.date, task)} className={`flex-1 md:flex-none px-4 py-2 rounded-full text-[10px] font-bold uppercase transition-all shadow-sm ${active ? 'bg-purple-600 text-white shadow-purple-200' : 'bg-purple-50 text-purple-400 border border-purple-100'}`}>{task}</button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2 w-full md:w-auto">
-                  {day.tasks.map(task => {
-                    const key = `${day.date}-${task}`;
-                    const active = taskProgress[key];
-                    return (
-                      <button key={task} onClick={() => toggleTask(day.date, task)} className={`flex-1 md:flex-none px-4 py-2 rounded-full text-[10px] font-bold uppercase transition-all shadow-sm ${active ? 'bg-purple-600 text-white shadow-purple-200' : 'bg-purple-50 text-purple-400 border border-purple-100'}`}>{task}</button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
