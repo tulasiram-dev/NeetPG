@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Target, Calendar, CheckCircle2, Zap, Trash2, Plus, RefreshCcw, TrendingUp, Book, MapPin } from 'lucide-react';
+import { Target, Calendar, CheckCircle2, Zap, Trash2, Plus, RefreshCcw, TrendingUp, Filter, MapPin } from 'lucide-react';
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxnOfTK9q4colGzSBVsgEhqY32eXjIVUmVRvZNoM1h6ZMkLyGTQMDhcYs_nGtQdfWgy7A/exec'; 
 
@@ -64,6 +64,9 @@ export default function App() {
   const [analyticsFilter, setAnalyticsFilter] = useState('All Subjects');
   const [newTest, setNewTest] = useState({ type: 'Grand Test', subject: 'Anatomy', correct: '', incorrect: '', left: '', date: new Date().toISOString().split('T')[0] });
 
+  // Ref for Auto-scroll
+  const todayRef = useRef(null);
+
   const loadDataFromSheet = async () => {
     if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes('YOUR_NEW_DEPLOYMENT')) return;
     setIsFetching(true);
@@ -79,6 +82,15 @@ export default function App() {
   };
 
   useEffect(() => { loadDataFromSheet(); }, []);
+
+  // AUTO-SCROLL LOGIC
+  useEffect(() => {
+    if (activeTab === 'schedule' && todayRef.current) {
+      setTimeout(() => {
+        todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [activeTab]);
 
   const syncData = async (payload) => {
     if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes('YOUR_NEW_DEPLOYMENT')) return;
@@ -97,7 +109,10 @@ export default function App() {
   const filteredPieData = useMemo(() => {
     const subset = analyticsFilter === 'All Subjects' 
       ? activeTests 
-      : activeTests.filter(t => t.subject === analyticsFilter || (analyticsFilter === 'GT' && t.type === 'Grand Test'));
+      : activeTests.filter(t => {
+          if (analyticsFilter === "Grand Test") return t.type === "Grand Test";
+          return t.subject === analyticsFilter;
+        });
     
     const totals = { correct: 0, incorrect: 0, left: 0 };
     subset.forEach(t => {
@@ -146,31 +161,33 @@ export default function App() {
         
         {/* RESPONSIVE DYNAMIC HEADER */}
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-3xl shadow-2xl p-5 md:p-8 mb-6 text-white overflow-hidden">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2">
-              <Target className="shrink-0" size={32} />
-              <span className="tracking-tight uppercase">NEET PG 2026</span>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 text-white">
+            <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2 text-white">
+              <Target className="shrink-0 text-white" size={32} />
+              <span className="tracking-tight uppercase text-white">NEET PG 2026</span>
             </h1>
-            <div className="flex items-center gap-3 bg-white/20 px-3 py-1.5 rounded-2xl backdrop-blur-md w-full sm:w-auto justify-between">
-              <button onClick={loadDataFromSheet} className={`p-1 hover:bg-white/20 rounded-full transition-transform ${isFetching ? 'animate-spin' : ''}`}>
+            <div className="flex items-center gap-3 bg-white/20 px-3 py-1.5 rounded-2xl backdrop-blur-md w-full sm:w-auto justify-between text-white">
+              <button onClick={loadDataFromSheet} className={`p-1 hover:bg-white/20 rounded-full transition-transform text-white ${isFetching ? 'animate-spin' : ''}`}>
                 <RefreshCcw size={18} />
               </button>
-              <span className="text-xs md:text-sm font-black tracking-widest uppercase">30 AUG 2026</span>
+              <span className="text-xs md:text-sm font-black tracking-widest uppercase text-white">30 AUG 2026</span>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm">
-              <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1"><Calendar size={12} /> Countdown</p>
-              <p className="text-2xl font-black">{daysToExam} Days</p>
+              <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1 text-white"><Calendar size={12} /> Countdown</p>
+              <p className="text-2xl font-black text-white">{daysToExam} Days</p>
             </div>
             <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm min-w-0">
-              <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1"><MapPin size={12} /> Current Subject</p>
-              <p className="text-2xl font-black truncate uppercase">{currentSubjectData.subject}</p>
+              <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1 text-white"><MapPin size={12} /> Current Subject</p>
+              <p className="text-2xl font-black truncate uppercase text-white">{currentSubjectData.subject}</p>
             </div>
-            <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm">
-              <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1"><TrendingUp size={12} /> Accuracy</p>
-              <p className="text-2xl font-black">{activeTests.length > 0 ? (activeTests.reduce((a,b)=>a+parseFloat(b.accuracy),0)/activeTests.length).toFixed(1) : 0}%</p>
+            <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm text-white">
+              <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1 text-white"><TrendingUp size={12} /> Accuracy</p>
+              <p className="text-2xl font-black text-white">
+                {activeTests.length > 0 ? (activeTests.reduce((a,b)=>a+parseFloat(b.accuracy),0)/activeTests.length).toFixed(1) : 0}%
+              </p>
             </div>
           </div>
         </div>
@@ -209,32 +226,25 @@ export default function App() {
           </div>
         )}
 
-        {/* TESTS TAB (CENTERED ADD BUTTON) */}
+        {/* TESTS TAB */}
         {activeTab === 'tests' && (
-          <div className="space-y-6">
+          <div className="space-y-6 pb-10">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white p-6 rounded-3xl shadow-xl border border-purple-100 min-h-[250px] flex flex-col justify-center">
                 <div className="flex justify-between items-center mb-2">
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Mistake Profile</h3>
-                  <select value={analyticsFilter} onChange={(e)=>setAnalyticsFilter(e.target.value)} className="text-[10px] font-bold bg-purple-50 text-purple-600 rounded-lg p-1 outline-none border-none">
-                    <option>All Subjects</option>{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <div className="text-[10px] font-bold bg-purple-50 text-purple-600 px-2 py-1 rounded-lg">Live Filter</div>
                 </div>
                 {filteredPieData.length > 0 ? (
                   <div className="h-44"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={filteredPieData} innerRadius={35} outerRadius={55} paddingAngle={5} dataKey="value">{filteredPieData.map((c, i) => <Cell key={i} fill={COLORS[i]} />)}</Pie><Tooltip /><Legend verticalAlign="bottom" wrapperStyle={{fontSize: '10px'}} /></PieChart></ResponsiveContainer></div>
-                ) : <div className="text-center text-xs text-gray-300 italic">No tests found for filter</div>}
+                ) : <div className="text-center text-xs text-gray-300 italic">No metrics for this subject</div>}
               </div>
 
               <div className="md:col-span-2 bg-white p-6 rounded-3xl shadow-xl border border-purple-100 flex flex-col items-center justify-center text-center">
                   {!showAddTest ? (
                     <div className="flex flex-col items-center gap-3">
                       <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Add Test Score</p>
-                      <button 
-                        onClick={()=>setShowAddTest(true)} 
-                        className="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-5 rounded-full shadow-lg hover:scale-105 transition-transform"
-                      >
-                        <Plus size={32} strokeWidth={3} />
-                      </button>
+                      <button onClick={()=>setShowAddTest(true)} className="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-5 rounded-full shadow-lg hover:scale-105 transition-transform"><Plus size={32} strokeWidth={3} /></button>
                     </div>
                   ) : (
                     <div className="w-full space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
@@ -243,11 +253,11 @@ export default function App() {
                          <button onClick={()=>setShowAddTest(false)} className="text-gray-400 hover:text-gray-600 font-bold text-sm">Cancel</button>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <select className="p-3 bg-gray-50 rounded-xl font-bold text-xs border-none" value={newTest.type} onChange={e => setNewTest({...newTest, type: e.target.value})}><option>Grand Test</option><option>Mini Test</option></select>
-                        {newTest.type === 'Mini Test' && <select className="p-3 bg-gray-50 rounded-xl font-bold text-xs border-none" value={newTest.subject} onChange={e => setNewTest({...newTest, subject: e.target.value})}>{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>}
-                        <input type="number" placeholder="Correct" className="p-3 bg-green-50 rounded-xl font-bold text-green-700 text-xs border-none" value={newTest.correct} onChange={e => setNewTest({...newTest, correct: e.target.value})} />
-                        <input type="number" placeholder="Wrong" className="p-3 bg-red-50 rounded-xl font-bold text-red-700 text-xs border-none" value={newTest.incorrect} onChange={e => setNewTest({...newTest, incorrect: e.target.value})} />
-                        <input type="number" placeholder="Left" className="p-3 bg-gray-50 rounded-xl font-bold text-gray-400 text-xs border-none" value={newTest.left} onChange={e => setNewTest({...newTest, left: e.target.value})} />
+                        <select className="p-3 bg-gray-50 rounded-xl font-bold text-xs border-none outline-none" value={newTest.type} onChange={e => setNewTest({...newTest, type: e.target.value})}><option>Grand Test</option><option>Mini Test</option></select>
+                        {newTest.type === 'Mini Test' && <select className="p-3 bg-gray-50 rounded-xl font-bold text-xs border-none outline-none" value={newTest.subject} onChange={e => setNewTest({...newTest, subject: e.target.value})}>{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>}
+                        <input type="number" placeholder="Correct" className="p-3 bg-green-50 rounded-xl font-bold text-green-700 text-xs border-none outline-none" value={newTest.correct} onChange={e => setNewTest({...newTest, correct: e.target.value})} />
+                        <input type="number" placeholder="Wrong" className="p-3 bg-red-50 rounded-xl font-bold text-red-700 text-xs border-none outline-none" value={newTest.incorrect} onChange={e => setNewTest({...newTest, incorrect: e.target.value})} />
+                        <input type="number" placeholder="Left" className="p-3 bg-gray-50 rounded-xl font-bold text-gray-400 text-xs border-none outline-none" value={newTest.left} onChange={e => setNewTest({...newTest, left: e.target.value})} />
                       </div>
                       <button onClick={addTest} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-bold text-sm uppercase shadow-lg active:scale-95 transition-transform">Save Log</button>
                     </div>
@@ -255,8 +265,20 @@ export default function App() {
               </div>
             </div>
 
+            <div className="bg-white p-4 rounded-3xl shadow-lg border border-purple-50 flex flex-col sm:flex-row items-center justify-between gap-4">
+               <div className="flex items-center gap-2 text-purple-600">
+                 <Filter size={18} />
+                 <span className="font-bold text-sm uppercase tracking-tight">Review Results</span>
+               </div>
+               <select value={analyticsFilter} onChange={(e)=>setAnalyticsFilter(e.target.value)} className="w-full sm:w-64 p-3 bg-purple-50 rounded-2xl font-bold text-xs text-purple-700 border-none outline-none text-center shadow-inner">
+                 <option value="All Subjects">ALL SUBJECTS</option>
+                 <option value="Grand Test">GRAND TESTS ONLY</option>
+                 {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+               </select>
+            </div>
+
             <div className="space-y-3">
-              {activeTests.slice().reverse().map(test => (
+              {activeTests.filter(t => analyticsFilter === "All Subjects" || (analyticsFilter === "Grand Test" ? t.type === "Grand Test" : t.subject === analyticsFilter)).slice().reverse().map(test => (
                 <div key={test.id} className="bg-white p-5 rounded-2xl flex justify-between items-center shadow-md border-l-8 border-pink-400 transition-all active:scale-[0.98]">
                   <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
                     <div className="font-bold text-gray-800 text-sm truncate uppercase">{test.type === 'Grand Test' ? 'GT' : test.subject}</div>
@@ -264,22 +286,22 @@ export default function App() {
                     <div className="text-center font-bold text-purple-600 text-sm">{test.accuracy}%</div>
                     <div className="text-right font-black text-gray-700 text-lg">{test.score} <span className="text-[10px] text-gray-300 font-normal">/ 800</span></div>
                   </div>
-                  <button onClick={() => {
-                    const updated = tests.filter(t => t.id !== test.id);
-                    setTests(updated);
-                    syncData({ type: 'test_update', tests: updated });
-                  }} className="ml-4 text-red-200 hover:text-red-500"><Trash2 size={18}/></button>
+                  <button onClick={() => { const updated = tests.filter(t => t.id !== test.id); setTests(updated); syncData({ type: 'test_update', tests: updated }); }} className="ml-4 text-red-200 hover:text-red-500"><Trash2 size={18}/></button>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* SCHEDULE TAB */}
+        {/* SCHEDULE TAB (WITH AUTO SCROLL) */}
         {activeTab === 'schedule' && (
           <div className="space-y-3 h-[60vh] overflow-y-auto pr-1 custom-scrollbar pb-10">
             {DAILY_SCHEDULE.map(day => (
-              <div key={day.date} className={`bg-white p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center shadow-sm border-l-8 ${day.date === todayStr ? 'border-purple-600 ring-2 ring-purple-100 shadow-lg scale-[1.01]' : 'border-purple-100 opacity-90'}`}>
+              <div 
+                key={day.date} 
+                ref={day.date === todayStr ? todayRef : null}
+                className={`bg-white p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center shadow-sm border-l-8 ${day.date === todayStr ? 'border-purple-600 ring-2 ring-purple-100 shadow-lg scale-[1.01]' : 'border-purple-100 opacity-90'}`}
+              >
                 <div className="w-full md:w-1/4 mb-3 md:mb-0">
                   <div className="font-bold text-gray-800 text-lg leading-none">{new Date(day.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</div>
                   <div className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">{day.subject}</div>
