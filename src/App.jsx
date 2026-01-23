@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts';
 import { Target, Calendar, CheckCircle2, Zap, Trash2, Plus, RefreshCcw, TrendingUp, Filter, MapPin, AlertCircle, Clock, Image as ImageIcon } from 'lucide-react';
 
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxnOfTK9q4colGzSBVsgEhqY32eXjIVUmVRvZNoM1h6ZMkLyGTQMDhcYs_nGtQdfWgy7A/exec'; 
+// NEW GOOGLE SCRIPT URL FOR ROW-BASED STORAGE
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyFpJSz2k6w6tiA9QGuoat4gEYlhYNSc7-9VIjel3lSdg7b1jlVV2eP5malCKYnp7Ttag/exec'; 
 const VAULT_URL = 'https://neet-pg-rud6.vercel.app/';
 
 const SUBJECTS = ['Anatomy', 'Physiology', 'Biochemistry', 'Pathology', 'Pharmacology', 'Microbiology', 'Forensic Medicine', 'Community Medicine', 'Medicine', 'Surgery', 'OBG', 'Pediatrics', 'Orthopedics', 'ENT', 'Ophthalmology', 'Psychiatry', 'Dermatology', 'Radiology', 'Anesthesia'];
@@ -78,15 +79,18 @@ export default function App() {
     };
   }, []);
 
+  // UPDATED: Standardized ID handling for row-based storage
   const loadDataFromSheet = async () => {
-    if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes('YOUR_NEW_DEPLOYMENT')) return;
+    if (!GOOGLE_SCRIPT_URL) return;
     setIsFetching(true);
     try {
       const response = await fetch(GOOGLE_SCRIPT_URL);
       const data = await response.json();
       if (data) {
-        if (data.tests) setTests(data.tests);
-        if (data.taskProgress) setTaskProgress(data.taskProgress);
+        // Normalize IDs to strings to prevent comparison errors
+        const normalizedTests = (data.tests || []).map(t => ({...t, id: t.id.toString()}));
+        setTests(normalizedTests);
+        setTaskProgress(data.taskProgress || {});
       }
     } catch (e) { console.error("Load Error:", e); }
     finally { setIsFetching(false); }
@@ -106,7 +110,7 @@ export default function App() {
   }, [activeTab]);
 
   const syncData = async (payload) => {
-    if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes('YOUR_NEW_DEPLOYMENT')) return;
+    if (!GOOGLE_SCRIPT_URL) return;
     try {
       await fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
@@ -190,13 +194,24 @@ export default function App() {
     }
     const c = parseInt(newTest.correct || 0);
     const w = parseInt(newTest.incorrect || 0);
+    const l = parseInt(newTest.left || 0);
+    
+    const dynamicMaxMarks = (c + w + l) * 4;
     const score = (c * 4) - w;
-    const accuracy = ((score / 800) * 100).toFixed(1);
-    const updatedTests = [...tests, { ...newTest, score, accuracy, id: Date.now() }];
+    const accuracy = dynamicMaxMarks > 0 ? ((score / dynamicMaxMarks) * 100).toFixed(1) : 0;
+    
+    const updatedTests = [...tests, { 
+      ...newTest, 
+      score, 
+      accuracy, 
+      maxMarks: dynamicMaxMarks,
+      id: Date.now().toString() // Ensure string IDs for row-based comparison
+    }];
+    
     setTests(updatedTests);
     syncData({ type: 'test_update', tests: updatedTests });
     setShowAddTest(false);
-    setNewTest({ type: 'Grand Test', subject: 'Anatomy', correct: '', incorrect: '', left: '', date: new Date().toISOString().split('T')[0] });
+    setNewTest({ type: 'Grand Test', subject: 'Anatomy', correct: '', incorrect: '', left: '', date: todayStr });
   };
 
   const toggleTask = (date, task) => {
@@ -206,7 +221,6 @@ export default function App() {
     syncData({ type: 'task_update', taskProgress: newProgress });
   };
 
-  // NEW LOGIC FOR PROJECTION LINE
   const combinedTimelineData = useMemo(() => {
     const sortedTests = [...activeTests]
       .filter(t => t.type === 'Grand Test')
@@ -216,12 +230,10 @@ export default function App() {
 
     const first = sortedTests[0];
     const last = sortedTests[sortedTests.length - 1];
-    
     const firstDate = new Date(first.date).getTime();
     const lastDate = new Date(last.date).getTime();
     const examDate = new Date('2026-08-30').getTime();
     
-    // Linear regression: (y2 - y1) / (x2 - x1)
     const ratePerMs = (last.score - first.score) / (lastDate - firstDate);
     const projectedFinalScore = Math.min(800, Math.round(last.score + (ratePerMs * (examDate - lastDate))));
 
@@ -230,7 +242,6 @@ export default function App() {
       { date: '2026-08-30', projection: projectedFinalScore }
     ];
 
-    // Combine sorted tests with a special projection key
     return [...sortedTests, ...projectionPoints];
   }, [activeTests]);
 
@@ -249,7 +260,6 @@ export default function App() {
       )}
 
       <div className="max-w-7xl mx-auto">
-        
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-3xl shadow-2xl p-5 md:p-8 mb-6 text-white overflow-hidden">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2 text-white">
@@ -371,11 +381,8 @@ export default function App() {
                       labelFormatter={(l) => new Date(l).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}
                       formatter={(val, name) => [val, name === 'score' ? 'Score' : 'Projected']}
                     />
-                    {/* Actual Growth Line */}
                     <Line type="monotone" dataKey="score" stroke="#8B5CF6" strokeWidth={3} dot={{fill: '#8B5CF6'}} strokeOpacity={1} connectNulls />
-                    {/* Projection Line */}
                     <Line type="monotone" dataKey="projection" stroke="#C084FC" strokeWidth={2} strokeDasharray="5 5" dot={false} connectNulls />
-                    
                     <ReferenceLine x="2026-08-30" stroke="red" label={{ position: 'top', value: 'NEET EXAM', fill: 'red', fontSize: 10, fontWeight: 'bold' }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -409,8 +416,8 @@ export default function App() {
 
               <div className="md:col-span-2 bg-white p-6 rounded-3xl shadow-xl border border-purple-100 flex flex-col items-center justify-center text-center">
                   {!showAddTest ? (
-                    <div className="flex flex-col items-center gap-3">
-                      <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Add Test Score</p>
+                    <div className="flex flex-col items-center gap-3 py-6">
+                      <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Add New Test</p>
                       <button onClick={()=>setShowAddTest(true)} className="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-5 rounded-full shadow-lg hover:scale-105 transition-transform"><Plus size={32} strokeWidth={3} /></button>
                     </div>
                   ) : (
@@ -467,9 +474,21 @@ export default function App() {
                     </div>
                     <div className="text-[10px] font-bold text-gray-400">C: {test.correct} | W: {test.incorrect} | L: {test.left || 0}</div>
                     <div className={`text-center font-bold text-sm ${parseFloat(test.accuracy) < 50 ? 'text-red-600' : 'text-purple-600'}`}>{test.accuracy}%</div>
-                    <div className="text-right font-black text-gray-700 text-lg">{test.score} <span className="text-[10px] text-gray-300 font-normal">/ 800</span></div>
+                    <div className="text-right font-black text-gray-700 text-lg">
+                      {test.score} 
+                      <span className="text-[10px] text-gray-300 font-normal ml-1">/ {test.maxMarks || 800}</span>
+                    </div>
                   </div>
-                  <button onClick={() => { const updated = tests.filter(t => t.id !== test.id); setTests(updated); syncData({ type: 'test_update', tests: updated }); }} className="ml-4 text-red-200 hover:text-red-500"><Trash2 size={18}/></button>
+                  <button 
+                    onClick={() => { 
+                      const updated = tests.filter(t => t.id.toString() !== test.id.toString()); 
+                      setTests(updated); 
+                      syncData({ type: 'test_update', tests: updated }); 
+                    }} 
+                    className="ml-4 text-red-200 hover:text-red-500"
+                  >
+                    <Trash2 size={18}/>
+                  </button>
                 </div>
               ))}
             </div>
