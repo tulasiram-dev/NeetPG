@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Target, Calendar, CheckCircle2, Zap, Trash2, Plus, RefreshCcw, TrendingUp, Filter, MapPin, Image as ImageIcon } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts';
+import { Target, Calendar, CheckCircle2, Zap, Trash2, Plus, RefreshCcw, TrendingUp, Filter, MapPin, AlertCircle, Clock, Image as ImageIcon } from 'lucide-react';
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxnOfTK9q4colGzSBVsgEhqY32eXjIVUmVRvZNoM1h6ZMkLyGTQMDhcYs_nGtQdfWgy7A/exec'; 
 const VAULT_URL = 'https://neet-pg-rud6.vercel.app/';
@@ -119,6 +119,30 @@ export default function App() {
 
   const activeTests = useMemo(() => tests.filter(t => t.status !== 'deleted'), [tests]);
   
+  const subjectAnalysis = useMemo(() => {
+    const stats = SUBJECTS.map(sub => {
+      const subTests = activeTests.filter(t => t.subject === sub);
+      if (subTests.length === 0) return { name: sub, accuracy: null, tests: 0, c: 0, w: 0, l: 0 };
+      const avgAccuracy = subTests.reduce((acc, curr) => acc + parseFloat(curr.accuracy), 0) / subTests.length;
+      const c = subTests.reduce((acc, curr) => acc + parseInt(curr.correct || 0), 0);
+      const w = subTests.reduce((acc, curr) => acc + parseInt(curr.incorrect || 0), 0);
+      const l = subTests.reduce((acc, curr) => acc + parseInt(curr.left || 0), 0);
+      return { name: sub, accuracy: avgAccuracy, tests: subTests.length, c, w, l };
+    });
+    return stats.sort((a, b) => {
+      if (a.accuracy === null) return 1;
+      if (b.accuracy === null) return -1;
+      return a.accuracy - b.accuracy;
+    });
+  }, [activeTests]);
+
+  const getSubjectColor = (acc) => {
+    if (acc === null) return 'bg-gray-50 text-gray-400 border-gray-200';
+    if (acc < 50) return 'bg-red-50 text-red-600 border-red-200';
+    if (acc < 70) return 'bg-yellow-50 text-yellow-600 border-yellow-200';
+    return 'bg-green-50 text-green-600 border-green-200';
+  };
+
   const filteredPieData = useMemo(() => {
     const subset = analyticsFilter === 'All Subjects' 
       ? activeTests 
@@ -126,22 +150,18 @@ export default function App() {
           if (analyticsFilter === "Grand Test") return t.type === "Grand Test";
           return t.subject === analyticsFilter;
         });
-    
     const totals = { correct: 0, incorrect: 0, left: 0 };
     subset.forEach(t => {
       totals.correct += parseInt(t.correct || 0);
       totals.incorrect += parseInt(t.incorrect || 0);
       totals.left += parseInt(t.left || 0);
     });
-
     if (totals.correct === 0 && totals.incorrect === 0 && totals.left === 0) return [];
     return [{ name: 'Correct', value: totals.correct }, { name: 'Wrong', value: totals.incorrect }, { name: 'Left', value: totals.left }];
   }, [activeTests, analyticsFilter]);
 
   const todayStr = today.toISOString().split('T')[0];
   const exactMatch = DAILY_SCHEDULE.find(d => d.date === todayStr);
-  
-  // Logic to find the scroll target even on Buffer Days
   const scrollTargetDate = useMemo(() => {
     const upcoming = DAILY_SCHEDULE.find(d => d.date >= todayStr);
     return upcoming ? upcoming.date : null;
@@ -186,10 +206,37 @@ export default function App() {
     syncData({ type: 'task_update', taskProgress: newProgress });
   };
 
+  // NEW LOGIC FOR PROJECTION LINE
+  const combinedTimelineData = useMemo(() => {
+    const sortedTests = [...activeTests]
+      .filter(t => t.type === 'Grand Test')
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    if (sortedTests.length < 2) return sortedTests;
+
+    const first = sortedTests[0];
+    const last = sortedTests[sortedTests.length - 1];
+    
+    const firstDate = new Date(first.date).getTime();
+    const lastDate = new Date(last.date).getTime();
+    const examDate = new Date('2026-08-30').getTime();
+    
+    // Linear regression: (y2 - y1) / (x2 - x1)
+    const ratePerMs = (last.score - first.score) / (lastDate - firstDate);
+    const projectedFinalScore = Math.min(800, Math.round(last.score + (ratePerMs * (examDate - lastDate))));
+
+    const projectionPoints = [
+      { date: last.date, projection: last.score },
+      { date: '2026-08-30', projection: projectedFinalScore }
+    ];
+
+    // Combine sorted tests with a special projection key
+    return [...sortedTests, ...projectionPoints];
+  }, [activeTests]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4 md:p-8 font-sans relative">
       
-      {/* FLOATING ACTION BUTTON */}
       {activeTab === 'dashboard' && (
         <button 
           onClick={() => window.location.href = VAULT_URL}
@@ -203,14 +250,12 @@ export default function App() {
 
       <div className="max-w-7xl mx-auto">
         
-        {/* HEADER */}
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-3xl shadow-2xl p-5 md:p-8 mb-6 text-white overflow-hidden">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2 text-white">
               <Target className="shrink-0 text-white" size={32} />
               <span className="tracking-tight uppercase text-white">NEET PG 2026</span>
             </h1>
-
             <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
               <div className="flex items-center gap-3 bg-white/20 px-3 py-1.5 rounded-2xl backdrop-blur-md flex-1 sm:flex-initial justify-between text-white">
                 <button onClick={loadDataFromSheet} className={`p-1 hover:bg-white/20 rounded-full transition-transform text-white ${isFetching ? 'animate-spin' : ''}`}>
@@ -220,7 +265,6 @@ export default function App() {
               </div>
             </div>
           </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="bg-white/10 border border-white/20 rounded-2xl p-4 backdrop-blur-sm text-white">
               <p className="text-[10px] font-bold uppercase opacity-70 mb-1 flex items-center gap-1 text-white"><Calendar size={12} /> Countdown</p>
@@ -239,7 +283,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* NAVIGATION */}
         <div className="flex gap-2 mb-6 bg-white rounded-2xl p-2 shadow-lg overflow-x-auto no-scrollbar">
           {['dashboard', 'tests', 'schedule'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs md:text-sm transition-all whitespace-nowrap ${activeTab === tab ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-100'}`}>
@@ -248,40 +291,99 @@ export default function App() {
           ))}
         </div>
 
-        {/* DASHBOARD */}
         {activeTab === 'dashboard' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative pb-16">
-            <div className="bg-white rounded-3xl shadow-xl p-6">
-              <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2"><Zap className="text-purple-500" size={20}/> {exactMatch ? "Today's Focus" : "Buffer Day Strategy"}</h2>
-              <div className="space-y-3">
-                {currentSubjectData.tasks.map(t => {
-                  const key = exactMatch ? `${todayStr}-${t}` : `buffer-${todayStr}-${t}`;
-                  const isDone = taskProgress[key];
-                  return (
-                    <div 
-                      key={t} 
-                      onClick={() => toggleTask(exactMatch ? todayStr : `buffer-${todayStr}`, t)}
-                      className="flex items-center justify-between p-4 bg-purple-50 rounded-2xl border border-purple-100 cursor-pointer active:scale-95 transition-all"
-                    >
-                      <span className={`font-bold text-xs uppercase tracking-tight ${isDone ? 'text-gray-400 line-through' : 'text-purple-900'}`}>{t}</span>
-                      <CheckCircle2 className={isDone ? "text-green-500" : "text-gray-300"} size={20} />
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+              <div className="bg-white rounded-3xl shadow-xl p-6">
+                <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2"><Zap className="text-purple-500" size={20}/> Focus</h2>
+                <div className="space-y-3">
+                  {currentSubjectData.tasks.map(t => {
+                    const key = exactMatch ? `${todayStr}-${t}` : `buffer-${todayStr}-${t}`;
+                    const isDone = taskProgress[key];
+                    return (
+                      <div 
+                        key={t} 
+                        onClick={() => toggleTask(exactMatch ? todayStr : `buffer-${todayStr}`, t)}
+                        className="flex items-center justify-between p-4 bg-purple-50 rounded-2xl border border-purple-100 cursor-pointer active:scale-95 transition-all"
+                      >
+                        <span className={`font-bold text-xs uppercase tracking-tight ${isDone ? 'text-gray-400 line-through' : 'text-purple-900'}`}>{t}</span>
+                        <CheckCircle2 className={isDone ? "text-green-500" : "text-gray-300"} size={20} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-3xl shadow-xl p-6">
+                <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
+                  <TrendingUp className="text-purple-500" size={20}/> Proficiency Radar
+                </h2>
+                <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                  {subjectAnalysis.map(sub => (
+                    <div key={sub.name} className={`p-3 md:p-4 rounded-2xl border transition-all shadow-sm ${getSubjectColor(sub.accuracy)}`}>
+                      <div className="flex justify-between items-start mb-2 gap-1">
+                         <p className="text-[9px] md:text-[10px] font-black uppercase truncate max-w-[100px] leading-tight">{sub.name}</p>
+                         <p className="text-xs md:text-sm font-black whitespace-nowrap">{sub.accuracy !== null ? `${sub.accuracy.toFixed(1)}%` : 'N/A'}</p>
+                      </div>
+                      <div className="flex justify-between items-center bg-white/40 rounded-lg px-2 py-1">
+                        <div className="text-center flex-1">
+                          <p className="text-[6px] md:text-[7px] font-bold uppercase opacity-60">C</p>
+                          <p className="text-[10px] md:text-xs font-black text-green-700">{sub.c}</p>
+                        </div>
+                        <div className="text-center flex-1 border-x border-black/5 px-2">
+                          <p className="text-[6px] md:text-[7px] font-bold uppercase opacity-60">W</p>
+                          <p className="text-[10px] md:text-xs font-black text-red-700">{sub.w}</p>
+                        </div>
+                        <div className="text-center flex-1">
+                          <p className="text-[6px] md:text-[7px] font-bold uppercase opacity-60">L</p>
+                          <p className="text-[10px] md:text-xs font-black text-gray-500">{sub.l}</p>
+                        </div>
+                      </div>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
             </div>
+
             <div className="bg-white rounded-3xl shadow-xl p-6">
-              <h2 className="text-xl font-bold mb-4 text-gray-800">Growth Score</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <TrendingUp className="text-purple-500" size={20}/> Full Exam Timeline
+                </h2>
+                <div className="flex items-center gap-3">
+                   <div className="flex items-center gap-1"><div className="w-3 h-3 bg-purple-500 rounded-full"></div><span className="text-[10px] font-bold text-gray-400">ACTUAL</span></div>
+                   <div className="flex items-center gap-1"><div className="w-3 h-0.5 border-t-2 border-dashed border-purple-300"></div><span className="text-[10px] font-bold text-gray-400">PROJECTED</span></div>
+                </div>
+              </div>
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={activeTests}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" hide /><YAxis domain={[0, 800]} /><Tooltip /><Line type="monotone" dataKey="score" stroke="#8B5CF6" strokeWidth={3} dot={{fill: '#8B5CF6'}} /></LineChart>
+                  <LineChart data={combinedTimelineData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis 
+                      dataKey="date" 
+                      type="category"
+                      domain={['auto', '2026-08-30']}
+                      tickFormatter={(str) => new Date(str).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                      tick={{fontSize: 10, fontWeight: 'bold'}}
+                    />
+                    <YAxis domain={[0, 800]} hide />
+                    <Tooltip 
+                      labelFormatter={(l) => new Date(l).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}
+                      formatter={(val, name) => [val, name === 'score' ? 'Score' : 'Projected']}
+                    />
+                    {/* Actual Growth Line */}
+                    <Line type="monotone" dataKey="score" stroke="#8B5CF6" strokeWidth={3} dot={{fill: '#8B5CF6'}} strokeOpacity={1} connectNulls />
+                    {/* Projection Line */}
+                    <Line type="monotone" dataKey="projection" stroke="#C084FC" strokeWidth={2} strokeDasharray="5 5" dot={false} connectNulls />
+                    
+                    <ReferenceLine x="2026-08-30" stroke="red" label={{ position: 'top', value: 'NEET EXAM', fill: 'red', fontSize: 10, fontWeight: 'bold' }} />
+                  </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </div>
         )}
 
-        {/* TESTS TAB */}
         {activeTab === 'tests' && (
           <div className="space-y-6 pb-10">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -291,7 +393,17 @@ export default function App() {
                   <div className="text-[10px] font-bold bg-purple-50 text-purple-600 px-2 py-1 rounded-lg">Live Filter</div>
                 </div>
                 {filteredPieData.length > 0 ? (
-                  <div className="h-44"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={filteredPieData} innerRadius={35} outerRadius={55} paddingAngle={5} dataKey="value">{filteredPieData.map((c, i) => <Cell key={i} fill={COLORS[i]} />)}</Pie><Tooltip /><Legend verticalAlign="bottom" wrapperStyle={{fontSize: '10px'}} /></PieChart></ResponsiveContainer></div>
+                  <div className="h-44">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={filteredPieData} innerRadius={35} outerRadius={55} paddingAngle={5} dataKey="value">
+                          {filteredPieData.map((c, i) => <Cell key={i} fill={COLORS[i]} />)}
+                        </Pie>
+                        <Tooltip />
+                        <Legend verticalAlign="bottom" wrapperStyle={{fontSize: '10px'}} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
                 ) : <div className="text-center text-xs text-gray-300 italic">No metrics for this subject</div>}
               </div>
 
@@ -308,8 +420,18 @@ export default function App() {
                          <button onClick={()=>setShowAddTest(false)} className="text-gray-400 hover:text-gray-600 font-bold text-sm">Cancel</button>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <select className="p-3 bg-gray-50 rounded-xl font-bold text-xs border-none outline-none" value={newTest.type} onChange={e => setNewTest({...newTest, type: e.target.value})}><option>Grand Test</option><option>Mini Test</option></select>
-                        {newTest.type === 'Mini Test' && <select className="p-3 bg-gray-50 rounded-xl font-bold text-xs border-none outline-none" value={newTest.subject} onChange={e => setNewTest({...newTest, subject: e.target.value})}>{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>}
+                        <div className="flex flex-col gap-1 text-left">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase ml-1">Date Taken</span>
+                          <input type="date" className="p-3 bg-gray-50 rounded-xl font-bold text-xs border-none outline-none" value={newTest.date} onChange={e => setNewTest({...newTest, date: e.target.value})} />
+                        </div>
+                        <div className="flex flex-col gap-1 text-left">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase ml-1">Test Type</span>
+                          <select className="p-3 bg-gray-50 rounded-xl font-bold text-xs border-none outline-none" value={newTest.type} onChange={e => setNewTest({...newTest, type: e.target.value})}><option>Grand Test</option><option>Mini Test</option></select>
+                        </div>
+                        <div className="flex flex-col gap-1 text-left">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase ml-1">Subject</span>
+                          <select disabled={newTest.type === 'Grand Test'} className="p-3 bg-gray-50 rounded-xl font-bold text-xs border-none outline-none disabled:opacity-30" value={newTest.subject} onChange={e => setNewTest({...newTest, subject: e.target.value})}>{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+                        </div>
                         <input type="number" placeholder="Correct" className="p-3 bg-green-50 rounded-xl font-bold text-green-700 text-xs border-none outline-none" value={newTest.correct} onChange={e => setNewTest({...newTest, correct: e.target.value})} />
                         <input type="number" placeholder="Wrong" className="p-3 bg-red-50 rounded-xl font-bold text-red-700 text-xs border-none outline-none" value={newTest.incorrect} onChange={e => setNewTest({...newTest, incorrect: e.target.value})} />
                         <input type="number" placeholder="Left" className="p-3 bg-gray-50 rounded-xl font-bold text-gray-400 text-xs border-none outline-none" value={newTest.left} onChange={e => setNewTest({...newTest, left: e.target.value})} />
@@ -323,7 +445,7 @@ export default function App() {
             <div className="bg-white p-4 rounded-3xl shadow-lg border border-purple-50 flex flex-col sm:flex-row items-center justify-between gap-4">
                <div className="flex items-center gap-2 text-purple-600">
                  <Filter size={18} />
-                 <span className="font-bold text-sm uppercase tracking-tight">Review Results</span>
+                 <span className="font-bold text-sm uppercase tracking-tight">Review History</span>
                </div>
                <select value={analyticsFilter} onChange={(e)=>setAnalyticsFilter(e.target.value)} className="w-full sm:w-64 p-3 bg-purple-50 rounded-2xl font-bold text-xs text-purple-700 border-none outline-none text-center shadow-inner">
                  <option value="All Subjects">ALL SUBJECTS</option>
@@ -333,12 +455,18 @@ export default function App() {
             </div>
 
             <div className="space-y-3">
-              {activeTests.filter(t => analyticsFilter === "All Subjects" || (analyticsFilter === "Grand Test" ? t.type === "Grand Test" : t.subject === analyticsFilter)).slice().reverse().map(test => (
-                <div key={test.id} className="bg-white p-5 rounded-2xl flex justify-between items-center shadow-md border-l-8 border-pink-400 transition-all active:scale-[0.98]">
+              {activeTests
+                .filter(t => analyticsFilter === "All Subjects" || (analyticsFilter === "Grand Test" ? t.type === "Grand Test" : t.subject === analyticsFilter))
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .map(test => (
+                <div key={test.id} className={`bg-white p-5 rounded-2xl flex justify-between items-center shadow-md border-l-8 transition-all active:scale-[0.98] ${parseFloat(test.accuracy) < 50 ? 'border-red-500' : 'border-pink-400'}`}>
                   <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
-                    <div className="font-bold text-gray-800 text-sm truncate uppercase">{test.type === 'Grand Test' ? 'GT' : test.subject}</div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-gray-800 text-sm uppercase truncate leading-tight">{test.type === 'Grand Test' ? 'GT' : test.subject}</span>
+                      <span className="text-[8px] font-black text-purple-400 flex items-center gap-1 mt-0.5"><Clock size={8}/> {new Date(test.date).toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'2-digit'})}</span>
+                    </div>
                     <div className="text-[10px] font-bold text-gray-400">C: {test.correct} | W: {test.incorrect} | L: {test.left || 0}</div>
-                    <div className="text-center font-bold text-purple-600 text-sm">{test.accuracy}%</div>
+                    <div className={`text-center font-bold text-sm ${parseFloat(test.accuracy) < 50 ? 'text-red-600' : 'text-purple-600'}`}>{test.accuracy}%</div>
                     <div className="text-right font-black text-gray-700 text-lg">{test.score} <span className="text-[10px] text-gray-300 font-normal">/ 800</span></div>
                   </div>
                   <button onClick={() => { const updated = tests.filter(t => t.id !== test.id); setTests(updated); syncData({ type: 'test_update', tests: updated }); }} className="ml-4 text-red-200 hover:text-red-500"><Trash2 size={18}/></button>
@@ -348,7 +476,6 @@ export default function App() {
           </div>
         )}
 
-        {/* SCHEDULE TAB */}
         {activeTab === 'schedule' && (
           <div className="space-y-3 h-[60vh] overflow-y-auto pr-1 custom-scrollbar pb-10">
             {DAILY_SCHEDULE.map(day => {
