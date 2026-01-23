@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Target, Calendar, CheckCircle2, Zap, Trash2, Plus, RefreshCcw, TrendingUp, Filter, MapPin } from 'lucide-react';
+import { Target, Calendar, CheckCircle2, Zap, Trash2, Plus, RefreshCcw, TrendingUp, Filter, MapPin, Image as ImageIcon } from 'lucide-react';
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxnOfTK9q4colGzSBVsgEhqY32eXjIVUmVRvZNoM1h6ZMkLyGTQMDhcYs_nGtQdfWgy7A/exec'; 
+const VAULT_URL = 'https://neet-pg-rud6.vercel.app/';
 
 const SUBJECTS = ['Anatomy', 'Physiology', 'Biochemistry', 'Pathology', 'Pharmacology', 'Microbiology', 'Forensic Medicine', 'Community Medicine', 'Medicine', 'Surgery', 'OBG', 'Pediatrics', 'Orthopedics', 'ENT', 'Ophthalmology', 'Psychiatry', 'Dermatology', 'Radiology', 'Anesthesia'];
 const COLORS = ['#10B981', '#EF4444', '#94A3B8']; 
@@ -64,12 +65,9 @@ export default function App() {
   const [analyticsFilter, setAnalyticsFilter] = useState('All Subjects');
   const [newTest, setNewTest] = useState({ type: 'Grand Test', subject: 'Anatomy', correct: '', incorrect: '', left: '', date: new Date().toISOString().split('T')[0] });
   
-  // 1. Dynamic Date Reference for Midnight Updates
   const [today, setToday] = useState(new Date());
-
   const todayRef = useRef(null);
 
-  // Auto-refresh date if tab is left open
   useEffect(() => {
     const handleFocus = () => setToday(new Date());
     window.addEventListener('focus', handleFocus);
@@ -140,7 +138,6 @@ export default function App() {
     return [{ name: 'Correct', value: totals.correct }, { name: 'Wrong', value: totals.incorrect }, { name: 'Left', value: totals.left }];
   }, [activeTests, analyticsFilter]);
 
-  // --- IMPROVED BUFFER LOGIC ---
   const todayStr = today.toISOString().split('T')[0];
   const exactMatch = DAILY_SCHEDULE.find(d => d.date === todayStr);
   
@@ -184,7 +181,20 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4 md:p-8 font-sans">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4 md:p-8 font-sans relative">
+      
+      {/* STRUCTURAL FIX: BUTTON PLACED AT ROOT LEVEL OUTSIDE SCROLLING CONTAINERS */}
+      {activeTab === 'dashboard' && (
+        <button 
+          onClick={() => window.location.href = VAULT_URL}
+          style={{ zIndex: 9999 }}
+          className="fixed bottom-8 right-8 flex flex-col items-center justify-center w-16 h-16 bg-gradient-to-tr from-purple-600 to-pink-600 text-white rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.3)] hover:scale-110 active:scale-95 transition-all border-4 border-white"
+        >
+          <ImageIcon size={24} strokeWidth={2.5} />
+          <span className="text-[9px] font-black uppercase mt-0.5 tracking-tighter">Vault</span>
+        </button>
+      )}
+
       <div className="max-w-7xl mx-auto">
         
         {/* RESPONSIVE DYNAMIC HEADER */}
@@ -194,11 +204,14 @@ export default function App() {
               <Target className="shrink-0 text-white" size={32} />
               <span className="tracking-tight uppercase text-white">NEET PG 2026</span>
             </h1>
-            <div className="flex items-center gap-3 bg-white/20 px-3 py-1.5 rounded-2xl backdrop-blur-md w-full sm:w-auto justify-between text-white">
-              <button onClick={loadDataFromSheet} className={`p-1 hover:bg-white/20 rounded-full transition-transform text-white ${isFetching ? 'animate-spin' : ''}`}>
-                <RefreshCcw size={18} />
-              </button>
-              <span className="text-xs md:text-sm font-black tracking-widest uppercase text-white">30 AUG 2026</span>
+
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+              <div className="flex items-center gap-3 bg-white/20 px-3 py-1.5 rounded-2xl backdrop-blur-md flex-1 sm:flex-initial justify-between text-white">
+                <button onClick={loadDataFromSheet} className={`p-1 hover:bg-white/20 rounded-full transition-transform text-white ${isFetching ? 'animate-spin' : ''}`}>
+                  <RefreshCcw size={18} />
+                </button>
+                <span className="text-xs md:text-sm font-black tracking-widest uppercase text-white">30 AUG 2026</span>
+              </div>
             </div>
           </div>
 
@@ -231,7 +244,7 @@ export default function App() {
 
         {/* DASHBOARD */}
         {activeTab === 'dashboard' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative pb-16">
             <div className="bg-white rounded-3xl shadow-xl p-6">
               <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2"><Zap className="text-purple-500" size={20}/> {exactMatch ? "Today's Focus" : "Buffer Day Strategy"}</h2>
               <div className="space-y-3">
@@ -262,7 +275,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ... (Keep your existing Tests and Schedule tabs exactly as they are below) ... */}
+        {/* TESTS TAB */}
         {activeTab === 'tests' && (
           <div className="space-y-6 pb-10">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -329,6 +342,7 @@ export default function App() {
           </div>
         )}
 
+        {/* SCHEDULE TAB */}
         {activeTab === 'schedule' && (
           <div className="space-y-3 h-[60vh] overflow-y-auto pr-1 custom-scrollbar pb-10">
             {DAILY_SCHEDULE.map(day => {
