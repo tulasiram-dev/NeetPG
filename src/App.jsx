@@ -141,6 +141,12 @@ export default function App() {
   const todayStr = today.toISOString().split('T')[0];
   const exactMatch = DAILY_SCHEDULE.find(d => d.date === todayStr);
   
+  // Logic to find the scroll target even on Buffer Days
+  const scrollTargetDate = useMemo(() => {
+    const upcoming = DAILY_SCHEDULE.find(d => d.date >= todayStr);
+    return upcoming ? upcoming.date : null;
+  }, [todayStr]);
+
   const currentSubjectData = useMemo(() => {
     if (exactMatch) return exactMatch;
     const lastSubject = [...DAILY_SCHEDULE].reverse().find(d => d.date < todayStr);
@@ -183,7 +189,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4 md:p-8 font-sans relative">
       
-      {/* STRUCTURAL FIX: BUTTON PLACED AT ROOT LEVEL OUTSIDE SCROLLING CONTAINERS */}
+      {/* FLOATING ACTION BUTTON */}
       {activeTab === 'dashboard' && (
         <button 
           onClick={() => window.location.href = VAULT_URL}
@@ -197,7 +203,7 @@ export default function App() {
 
       <div className="max-w-7xl mx-auto">
         
-        {/* RESPONSIVE DYNAMIC HEADER */}
+        {/* HEADER */}
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-3xl shadow-2xl p-5 md:p-8 mb-6 text-white overflow-hidden">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2 text-white">
@@ -347,15 +353,20 @@ export default function App() {
           <div className="space-y-3 h-[60vh] overflow-y-auto pr-1 custom-scrollbar pb-10">
             {DAILY_SCHEDULE.map(day => {
               const isToday = day.date === todayStr;
+              const isNextStudyDay = day.date === scrollTargetDate;
+
               return (
                 <div 
                   key={day.date} 
-                  ref={isToday ? todayRef : null}
+                  ref={isNextStudyDay ? todayRef : null}
                   className={`bg-white p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center shadow-sm border-l-8 ${isToday ? 'border-purple-600 ring-2 ring-purple-100 shadow-lg scale-[1.01]' : 'border-purple-100 opacity-90'}`}
                 >
                   <div className="w-full md:w-1/4 mb-3 md:mb-0">
                     <div className="font-bold text-gray-800 text-lg leading-none">{new Date(day.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</div>
                     <div className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">{day.subject}</div>
+                    {isNextStudyDay && !isToday && (
+                      <span className="text-[8px] text-purple-600 font-black uppercase mt-1 block">Next Study Day</span>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2 w-full md:w-auto">
                     {day.tasks.map(task => {
