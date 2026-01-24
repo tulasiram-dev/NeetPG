@@ -2,11 +2,10 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts';
 import { Target, Calendar, CheckCircle2, Zap, Trash2, Plus, RefreshCcw, TrendingUp, Filter, MapPin, AlertCircle, Clock, Image as ImageIcon } from 'lucide-react';
 
-// NEW GOOGLE SCRIPT URL FOR ROW-BASED STORAGE
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyFpJSz2k6w6tiA9QGuoat4gEYlhYNSc7-9VIjel3lSdg7b1jlVV2eP5malCKYnp7Ttag/exec'; 
 const VAULT_URL = 'https://neet-pg-rud6.vercel.app/';
 
-const SUBJECTS = ['Anatomy', 'Physiology', 'Biochemistry', 'Pathology', 'Pharmacology', 'Microbiology', 'Forensic Medicine', 'Community Medicine', 'Medicine', 'Surgery', 'OBG', 'Pediatrics', 'Orthopedics', 'ENT', 'Ophthalmology', 'Psychiatry', 'Dermatology', 'Radiology', 'Anesthesia'];
+const SUBJECTS = ['All Subjects', 'Anatomy', 'Physiology', 'Biochemistry', 'Pathology', 'Pharmacology', 'Microbiology', 'Forensic Medicine', 'Community Medicine', 'Medicine', 'Surgery', 'OBG', 'Pediatrics', 'Orthopedics', 'ENT', 'Ophthalmology', 'Psychiatry', 'Dermatology', 'Radiology', 'Anesthesia'];
 const COLORS = ['#10B981', '#EF4444', '#94A3B8']; 
 
 const DAILY_SCHEDULE = [
@@ -64,7 +63,7 @@ export default function App() {
   const [showAddTest, setShowAddTest] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [analyticsFilter, setAnalyticsFilter] = useState('All Subjects');
-  const [newTest, setNewTest] = useState({ type: 'Grand Test', subject: 'Anatomy', correct: '', incorrect: '', left: '', date: new Date().toISOString().split('T')[0] });
+  const [newTest, setNewTest] = useState({ type: 'Grand Test', subject: 'All Subjects', correct: '', incorrect: '', left: '', date: new Date().toISOString().split('T')[0] });
   
   const [today, setToday] = useState(new Date());
   const todayRef = useRef(null);
@@ -79,7 +78,6 @@ export default function App() {
     };
   }, []);
 
-  // UPDATED: Standardized ID handling for row-based storage
   const loadDataFromSheet = async () => {
     if (!GOOGLE_SCRIPT_URL) return;
     setIsFetching(true);
@@ -87,7 +85,6 @@ export default function App() {
       const response = await fetch(GOOGLE_SCRIPT_URL);
       const data = await response.json();
       if (data) {
-        // Normalize IDs to strings to prevent comparison errors
         const normalizedTests = (data.tests || []).map(t => ({...t, id: t.id.toString()}));
         setTests(normalizedTests);
         setTaskProgress(data.taskProgress || {});
@@ -99,32 +96,36 @@ export default function App() {
   useEffect(() => { loadDataFromSheet(); }, []);
 
   useEffect(() => {
-    if (activeTab === 'schedule') {
-      const scrollTimer = setTimeout(() => {
-        if (todayRef.current) {
-          todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 400); 
-      return () => clearTimeout(scrollTimer);
+    if (activeTab === 'schedule' && todayRef.current) {
+        todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [activeTab]);
 
+  // OPTIMIZED SYNC: Shows spinner in header during any background save/delete
   const syncData = async (payload) => {
     if (!GOOGLE_SCRIPT_URL) return;
+    setIsFetching(true); 
     try {
       await fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors', 
-        headers: { 'Content-Type': 'application/json' },
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
-    } catch (e) { console.error("Sync Error:", e); }
+    } catch (e) { 
+      console.error("Sync Error:", e);
+      alert("Network Error: Could not sync with Google Sheets. Please refresh.");
+    } finally {
+      // Small delay ensures Google Script has finished row processing
+      setTimeout(() => setIsFetching(false), 1000);
+    }
   };
 
   const activeTests = useMemo(() => tests.filter(t => t.status !== 'deleted'), [tests]);
   
   const subjectAnalysis = useMemo(() => {
-    const stats = SUBJECTS.map(sub => {
+    const filteredSubjects = SUBJECTS.filter(s => s !== 'All Subjects');
+    const stats = filteredSubjects.map(sub => {
       const subTests = activeTests.filter(t => t.subject === sub);
       if (subTests.length === 0) return { name: sub, accuracy: null, tests: 0, c: 0, w: 0, l: 0 };
       const avgAccuracy = subTests.reduce((acc, curr) => acc + parseFloat(curr.accuracy), 0) / subTests.length;
@@ -195,7 +196,6 @@ export default function App() {
     const c = parseInt(newTest.correct || 0);
     const w = parseInt(newTest.incorrect || 0);
     const l = parseInt(newTest.left || 0);
-    
     const dynamicMaxMarks = (c + w + l) * 4;
     const score = (c * 4) - w;
     const accuracy = dynamicMaxMarks > 0 ? ((score / dynamicMaxMarks) * 100).toFixed(1) : 0;
@@ -205,13 +205,13 @@ export default function App() {
       score, 
       accuracy, 
       maxMarks: dynamicMaxMarks,
-      id: Date.now().toString() // Ensure string IDs for row-based comparison
+      id: Date.now().toString() 
     }];
     
     setTests(updatedTests);
     syncData({ type: 'test_update', tests: updatedTests });
     setShowAddTest(false);
-    setNewTest({ type: 'Grand Test', subject: 'Anatomy', correct: '', incorrect: '', left: '', date: todayStr });
+    setNewTest({ type: 'Grand Test', subject: 'All Subjects', correct: '', incorrect: '', left: '', date: todayStr });
   };
 
   const toggleTask = (date, task) => {
@@ -244,6 +244,13 @@ export default function App() {
 
     return [...sortedTests, ...projectionPoints];
   }, [activeTests]);
+
+  // FIX: Immediate UI update for smooth deletion
+  const handleDelete = (id) => {
+    const updated = tests.filter(t => t.id.toString() !== id.toString());
+    setTests(updated);
+    syncData({ type: 'test_update', tests: updated });
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4 md:p-8 font-sans relative">
@@ -437,7 +444,7 @@ export default function App() {
                         </div>
                         <div className="flex flex-col gap-1 text-left">
                           <span className="text-[10px] font-bold text-gray-400 uppercase ml-1">Subject</span>
-                          <select disabled={newTest.type === 'Grand Test'} className="p-3 bg-gray-50 rounded-xl font-bold text-xs border-none outline-none disabled:opacity-30" value={newTest.subject} onChange={e => setNewTest({...newTest, subject: e.target.value})}>{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+                          <select className="p-3 bg-gray-50 rounded-xl font-bold text-xs border-none outline-none" value={newTest.subject} onChange={e => setNewTest({...newTest, subject: e.target.value})}>{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>
                         </div>
                         <input type="number" placeholder="Correct" className="p-3 bg-green-50 rounded-xl font-bold text-green-700 text-xs border-none outline-none" value={newTest.correct} onChange={e => setNewTest({...newTest, correct: e.target.value})} />
                         <input type="number" placeholder="Wrong" className="p-3 bg-red-50 rounded-xl font-bold text-red-700 text-xs border-none outline-none" value={newTest.incorrect} onChange={e => setNewTest({...newTest, incorrect: e.target.value})} />
@@ -457,7 +464,7 @@ export default function App() {
                <select value={analyticsFilter} onChange={(e)=>setAnalyticsFilter(e.target.value)} className="w-full sm:w-64 p-3 bg-purple-50 rounded-2xl font-bold text-xs text-purple-700 border-none outline-none text-center shadow-inner">
                  <option value="All Subjects">ALL SUBJECTS</option>
                  <option value="Grand Test">GRAND TESTS ONLY</option>
-                 {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                 {SUBJECTS.filter(s => s !== 'All Subjects').map(s => <option key={s} value={s}>{s}</option>)}
                </select>
             </div>
 
@@ -469,7 +476,7 @@ export default function App() {
                 <div key={test.id} className={`bg-white p-5 rounded-2xl flex justify-between items-center shadow-md border-l-8 transition-all active:scale-[0.98] ${parseFloat(test.accuracy) < 50 ? 'border-red-500' : 'border-pink-400'}`}>
                   <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
                     <div className="flex flex-col">
-                      <span className="font-bold text-gray-800 text-sm uppercase truncate leading-tight">{test.type === 'Grand Test' ? 'GT' : test.subject}</span>
+                      <span className="font-bold text-gray-800 text-sm uppercase truncate leading-tight">{test.type === 'Grand Test' ? (test.subject === 'All Subjects' ? 'Mega GT' : `GT: ${test.subject}`) : test.subject}</span>
                       <span className="text-[8px] font-black text-purple-400 flex items-center gap-1 mt-0.5"><Clock size={8}/> {new Date(test.date).toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'2-digit'})}</span>
                     </div>
                     <div className="text-[10px] font-bold text-gray-400">C: {test.correct} | W: {test.incorrect} | L: {test.left || 0}</div>
@@ -480,11 +487,7 @@ export default function App() {
                     </div>
                   </div>
                   <button 
-                    onClick={() => { 
-                      const updated = tests.filter(t => t.id.toString() !== test.id.toString()); 
-                      setTests(updated); 
-                      syncData({ type: 'test_update', tests: updated }); 
-                    }} 
+                    onClick={() => handleDelete(test.id)} 
                     className="ml-4 text-red-200 hover:text-red-500"
                   >
                     <Trash2 size={18}/>
