@@ -5,7 +5,7 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzcsvfbz_oMi6
 
 const ALL_SUBJECTS = [
   'Anatomy', 'Physiology', 'Biochemistry', 'Pathology', 'Pharmacology',
-  'Microbiology', 'Forensic Medicine', 'Communigit push --forcety Medicine', 'Medicine',
+  'Microbiology', 'Forensic Medicine', 'Community Medicine', 'Medicine',
   'Surgery', 'OBG', 'Pediatrics', 'Orthopedics', 'ENT', 'Ophthalmology',
   'Psychiatry', 'Dermatology', 'Radiology', 'Anesthesia'
 ];
