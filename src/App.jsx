@@ -359,7 +359,7 @@ export default function App() {
             {/* FIX: smaller title on mobile to prevent overflow */}
             <h1 className="text-xl md:text-4xl font-bold flex items-center gap-2 text-white">
               <Target className="shrink-0 text-white" size={28} />
-              <span className="tracking-tight uppercase text-white">NEET PG 2026</span>
+              <span className="tracking-tight uppercase text-white">NEET PG 2026 - Deepu</span>
             </h1>
             <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl backdrop-blur-md ${inicetPassed ? 'bg-white/10' : 'bg-amber-400/30 border border-amber-300/40'}`}>
